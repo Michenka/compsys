@@ -235,8 +235,6 @@ let rec neg d =
   | [] -> False("")
   | d::dtail -> UOrExpr(d, neg dtail)
 
-let lsBool = [GrExpr(Name "x",Num 3); LeExpr(Name "x",Num 2)];;
-neg lsBool;;
 
 let helper2 lexpr = 
   match lexpr with
@@ -255,13 +253,14 @@ let isBool l =
 //   | l::ltail -> (qs,[printLabels l])
 
 
-
-
+let chooseBoolL ls = List.filter (fun (label,qf) -> isBool label) ls
+let applyHelper ls = List.map (fun (c,qf) -> (helper2 c,qf)) (chooseBoolL ls)
+let applyMakeDet ls = makeDet (applyHelper ls)
 
 let printHelper (qs,ls) = 
     match ls with 
     | [] -> (qs,[])
-    | (BoolLabel(x),qf)::ltail -> (qs,List.map (fun (x,qf) -> (evalB(x),qf)) ((makeDet (List.map (fun c -> helper2 c) (List.filter (fun (label,qf) -> isBool label) ls)))@(List.map (fun c -> helper2 c) (List.filter (fun(k,qf) -> !(isBool k) ls)))))
+    | (BoolLabel(x),qf)::ltail -> (qs,List.map (fun (x,qf) -> (evalB(x),qf)) ((makeDet (List.map (fun (c,qf) -> (helper2 c,qf)) (List.filter (fun (label,qf) -> isBool label) ls)) (False("")))@(List.map (fun (c,qf) -> (helper2 c,qf)) (List.filter (fun(k,qf) -> not(isBool k)) ls))))
     | l::ltail -> (qs,[printLabels l])
 
 // let printHelper (qs,ls) = 
@@ -292,33 +291,22 @@ let detLa = Labels detEd;;
 let strLsDet = printEdges detLa;;
 
 
+let rec strDet1 qs ls =
+  match ls with
+  | [] -> ""
+  | (label,qf)::ltail -> qs + "->"+qf+"[label =  \" " + label + " \"]\n " + strDet1 qs ltail+" "
 
-let strDetLabels bl= List.map (fun x -> evalB(x)) bl;; 
-
-
-
-let lsBool = [GrExpr(Name "x",Num 3); LeExpr(Name "x",Num 2)];;
-let boolL = makeDetLabels lsBool (False(""));;
-strDetLabels boolL;;
-
-let x1 = lsBool.[0];;
-let f = False("");;
-let u1 = UAndExpr(x1,NotExpr(f));;
-evalB(u1);;
-makeDetLabels lsBool f;;
+let rec strDet2 ls = 
+  match ls with
+  | [] -> ""
+  |(qs,ls)::ltail -> strDet1 qs ls
+ 
+let graphDet edges = "digraph D { "+strDet2 edges+" }"
 
 
-
-evalB(GrExpr(Name "x",Num 3));;
-
-// evalB(True(""));;
-
-// edgesC "qs" "qf" e3 ([],0);;
-// edgesC "qs" "qf" e1 ([],0);;
-// edgesC "qs" "qf" e4 ([],0);;
-edgesC "qs" "qf" eif ([],0);;
+graphDet strLsDet;;
 
 
+let writeGraphDet edges = File.WriteAllText(wd+"/graph.dot", (graphDet edges));;
 
 
-//be back soon
