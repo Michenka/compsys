@@ -1,4 +1,5 @@
 
+
 open System.IO
 
 
@@ -91,28 +92,23 @@ and evalB (e:Boolean1) =
     | EqualsExpr(x,y) -> "( " + evalA(x) + " = " + evalA(y) + " )"
     | NotEqualsExpr(x,y) -> "( " + evalA(x) + " != " + evalA(y) + " )"
 
-
-let rec edgesC start stop e (edges,n)= 
-    match e with
-    | Skip(x) -> ((start,"skip",stop)::edges,n)
-    | AssExpr(x,y) -> ((start, evalC e, stop)::edges,n)
-    | IfExpr(x) -> edgesGC start stop x (edges,n) 
-    | DoExpr(x) -> edgesGC start start x ((start,"done",stop)::edges,n)
-    | SemiExpr(x,y) -> edgesC start ("q"+string n) x (edgesC ("q"+ string n) stop y (edges,n))
-
-and edgesGC start stop e (edges,n) = 
-    match e with
-    | ArrExpr(x,y) -> edgesC ("q"+ string n) stop y ((start, evalB(x) , "q"+ string n)::edges,n+1)
-    | ElseExpr(gc1,gc2) -> edgesGC start stop gc2 (edgesGC start stop gc1 (edges,n))
-
 let rec extractBool e = 
   match e with
   | ArrExpr(x,y) -> [x]
   | ElseExpr(gc1,gc2) -> extractBool gc1 @ extractBool gc2
-// and extractBoolGC e =
-//   match e with
-//   | ArrExpr(x,y) -> x
-//   | ElseExpr(gc1,gc2) -> extractBoolGC(gc1)
+
+let rec edgesC start stop e (edges,n)= 
+    match e with
+    | Skip(x) -> ((start,SkipLabel,stop)::edges,n)
+    | AssExpr(x,y) -> ((start, AssLabel(x,y), stop)::edges,n)
+    | IfExpr(x) -> edgesGC start stop x (edges,n) 
+    | DoExpr(x) -> edgesGC start start x ((start,Done(extractBool x),stop)::edges,n)
+    | SemiExpr(x,y) -> edgesC start ("q"+string n) x (edgesC ("q"+ string n) stop y (edges,n))
+
+and edgesGC start stop e (edges,n) = 
+    match e with
+    | ArrExpr(x,y) -> edgesC ("q"+ string n) stop y ((start, BoolLabel(x) , "q"+ string n)::edges,n+1)
+    | ElseExpr(gc1,gc2) -> edgesGC start stop gc2 (edgesGC start stop gc1 (edges,n))
 
 let rec detEdgesC start stop (e:TypeC) (edges,n)= 
     match e with
@@ -127,28 +123,6 @@ and detEdgesGC start stop e (edges,n) =
     | ArrExpr(x,y) -> detEdgesC ("q"+ string n) stop y ((start, BoolLabel(x), "q"+ string n)::edges,n+1)
     | ElseExpr(gc1,gc2) -> detEdgesGC start stop gc2 (detEdgesGC start stop gc1 (edges,n))
 
-
-
-
-
-
-let rec strEdges edges = 
-    match edges with
-    | [] -> ""
-    | (start,label,stop)::tail -> start + "->"+stop+"[label =  \" " + label + " \"]\n " + strEdges tail+" "
-
-// let detEdges edges = List.map (fun (start,label,stop) -> (start,label+" & !(false)",stop)) edges 
-
-let makeGraph edges = "digraph D { "+strEdges edges+" }"
-
-let wd = "/Users/ninapeuker/Desktop/General Engineering/4th semester 2022/02141 Computer Science Modelling/Code/Assignment1"
-
-let writeGraph edges = File.WriteAllText(wd+"/graph.dot", (makeGraph edges));;
-
-
-
-//helper functions to extract all labels/ transitions associated with each node
-//extracts all transitions for a particular node
 let rec Node edges node = 
     match edges with 
     | [] -> []
@@ -161,67 +135,18 @@ let rec Nodes edges nodes =
   | (start,label,stop)::tail when List.exists (fun c -> c = start) nodes -> Nodes tail nodes 
   | (start,label,stop)::tail -> Nodes tail (start::nodes)
 
-
-//outs it all together in the form (node* list <(labels*node)>)
 let Labels edges = List.map (fun l -> (l,Node edges l)) (Nodes edges [])
 
-
-
-
-
-let e1 = Skip("");;
-let e2 = AssExpr(Name("x"),Num(4));;
-let e22 = AssExpr(Name("y"),Num(3));;
-let e3 = SemiExpr(e1,e2);;
-let e4 = SemiExpr(e3,e22);;
-let eif = IfExpr
-            (ElseExpr
-              (ArrExpr (GrExpr (Name "x", Num 3), AssExpr (Name "y", Num 4)),
-                  ArrExpr (LeExpr (Name "x", Num 2), AssExpr (Name "y", Num 2))));;
-let earr = IfExpr(ElseExpr(ArrExpr (GrEqExpr (Name "x", Name "y"), AssExpr (Name "z", Name "x")),
-            ArrExpr (GrExpr (Name "y", Name "x"), AssExpr (Name "z", Name "y"))))
-//IfExpr (ArrExpr (GrExpr (Name "x", Num 3), AssExpr (Name "y", Num 4)));;
-
-let (edges1,n1) = edgesC "qs" "qf" earr ([],0);;
-let (edges2,n2) = edgesC "qs" "qf" eif ([],0);;
-let (detEdges2,dn2) = detEdgesC "qs" "qf" eif ([],0);;
-let str1 = strEdges edges1;;
-
-
-
-
-edges2;;
-Labels edges2;;
-detEdges2;;
-Labels detEdges2;;
-
-//make deterministic labels out of a list of Boolean1s
-let rec makeDetLabels ls label= 
-  match ls,label with
-    | [],_ -> []
-    | x::xtail, label -> UAndExpr(x,NotExpr(label)) :: (makeDetLabels xtail (UOrExpr(x,label)))
-
-
-//take the list of nodes with transition and final node and map the makeLabel function to it, updating 
-//the label every time
 let rec makeDet detList label= 
   match detList with
   | [] -> []
-  | (x,qf)::ltail -> (UAndExpr(x,NotExpr(label)),qf):: makeDet ltail (UOrExpr(x,label))
-
-let makeDetEdges edges = List.map (fun (qs,ls) -> (qs, makeDet ls (False("")))) edges;;
-
-// let convertBool (BoolLabel(x)) = x;;
-// let convertAss (AssLabel(x,y)) = AssExpr(x,y);;
+  | (x,qf)::ltail -> (UAndExpr(x,NotExpr(label)),qf):: (makeDet ltail (UOrExpr(x,label)))
 
 let rec printDone bls =
   match bls with 
   | [] -> ""
   | b::bl -> evalB(b)+"|"+(printDone bl)
 
-
-
-//convert the labels to types
 let printLabels l = 
   match l with
   | (AssLabel(x,y),qf) -> (evalC(AssExpr(x,y)),qf)
@@ -229,7 +154,6 @@ let printLabels l =
   | (SkipLabel,qf) -> ("skip",qf)
   | (Done(bls),qf) -> ("!("+printDone bls + ")",qf)
 
-// let printEdges edges =  List.map (fun (qs,ls) -> (qs, List.map (fun l -> printLabels l) ls)) edges;;
 let rec neg d =
   match d with
   | [] -> False("")
@@ -238,75 +162,54 @@ let rec neg d =
 
 let helper2 lexpr = 
   match lexpr with
-  | BoolLabel(x) -> x
-  | Done(ls) -> NotExpr(neg ls)
+    | BoolLabel(x) -> x
+    | Done(ls) -> NotExpr(neg ls)
 
 let isBool l = 
   match l with 
-  | BoolLabel(x) -> true
-  | _ -> false
-
-// let printHelper (qs,ls) = 
-//   match ls with 
-//   | [] -> (qs,[])
-//   | (BoolLabel(x),qf)::ltail -> (qs,List.map (fun (x,qf) -> (evalB(x),qf)) (makeDet((x,qf)::(List.map (fun (lexp,qf) -> (helper2 lexp,qf)) (List.filter (fun (k,qf) -> isBool k) ls))) (False(""))))
-//   | l::ltail -> (qs,[printLabels l])
+    | BoolLabel(x) -> true
+    | _ -> false
 
 
-let chooseBoolL ls = List.filter (fun (label,qf) -> isBool label) ls
-let applyHelper ls = List.map (fun (c,qf) -> (helper2 c,qf)) (chooseBoolL ls)
-let applyMakeDet ls = makeDet (applyHelper ls)
+let rec printHelper ls = List.map (fun t -> printLabels t) ls
 
-let printHelper (qs,ls) = 
+let printHelperDet (qs,ls) = 
     match ls with 
-    | [] -> (qs,[])
-    | (BoolLabel(x),qf)::ltail -> (qs,List.map (fun (x,qf) -> (evalB(x),qf)) ((makeDet (List.map (fun (c,qf) -> (helper2 c,qf)) (List.filter (fun (label,qf) -> isBool label) ls)) (False("")))@(List.map (fun (c,qf) -> (helper2 c,qf)) (List.filter (fun(k,qf) -> not(isBool k)) ls))))
-    | l::ltail -> (qs,[printLabels l])
-
-// let printHelper (qs,ls) = 
-//   match ls with 
-//   | [] -> (qs,[])
-//   | (BoolLabel(x),qf)::ltail -> (qs,List.map (fun (x,qf) -> (evalB(x),qf)) (makeDet((x,qf)::(List.map (fun (lexp,qf) -> (helper2 lexp,qf)) ltail)) (False(""))))
-//   | l::ltail -> (qs,[printLabels l])
-
-let printEdges edges =  List.map (fun (qs,ls) -> printHelper (qs,ls)) edges;;
+        | [] -> (qs,[])
+        | (BoolLabel(x),qf)::ltail -> (qs,List.map (fun (x,qf) -> (evalB(x),qf)) ((makeDet (List.map (fun (c,qf) -> (helper2 c,qf)) (List.filter (fun (label,qf) -> isBool label) ls)) (False("")))@(List.map (fun (c,qf) -> (helper2 c,qf)) (List.filter (fun(k,qf) -> not(isBool k)) ls))))
+        | l::ltail -> (qs,[printLabels l])
 
 
-detEdges2;;
-let detLabels2 = Labels detEdges2;;
-printEdges detLabels2;;
-//this is equivalent to running the edges and Label functions for a non-deterministic graph
+let printEdgesDet edges =  List.map (fun (qs,ls) -> printHelperDet (qs,ls)) edges;;
 
-edges2;;
-Labels edges2;;
-
-//To Do: transform the Do expression for the non-deterministic graph
-let e = DoExpr (ArrExpr (EqualsExpr (Name "x", Num 3), AssExpr (Name "y", Num 4)));;
-let (edges, n) =  edgesC "qs" "qf" e ([],0);;
-let strLsE = Labels edges;;
-
-let det = DoExpr (ArrExpr (EqualsExpr (Name "x", Num 3), AssExpr (Name "y", Num 4)));;
-let (detEd, nDet) = detEdgesC "qs" "qf" det ([],0);;
-let detLa = Labels detEd;;
-let strLsDet = printEdges detLa;;
-
+let printEdges edges = List.map (fun (qs,ls) -> (qs,printHelper ls)) edges
 
 let rec strDet1 qs ls =
   match ls with
-  | [] -> ""
-  | (label,qf)::ltail -> qs + "->"+qf+"[label =  \" " + label + " \"]\n " + strDet1 qs ltail+" "
+    | [] -> ""
+    | (label,qf)::ltail -> qs + "->"+qf+"[label =  \" " + label + " \"]\n " + strDet1 qs ltail+" "
 
 let rec strDet2 ls = 
   match ls with
-  | [] -> ""
-  |(qs,ls)::ltail -> strDet1 qs ls
- 
-let graphDet edges = "digraph D { "+strDet2 edges+" }"
+    | [] -> ""
+    |(qs,ls)::ltail -> strDet1 qs ls + strDet2 ltail
+
+let graphStr edges = "digraph D { "+strDet2 edges+" }"
+
+let edges e = edgesC "qs" "qf" e ([],0);;
+let detEdges e = detEdgesC "qs" "qf" e ([],0);;
 
 
-graphDet strLsDet;;
 
+//all you need for the execution is this function which takes expression e (from the Parser) and a bool det indication if the
+//graph should be deterministic or not
+let graph e det = 
+    match det with
+    | false -> match edges e with
+                | (edge,n) ->  edge |> Labels |> printEdges |> graphStr
+    | true -> match detEdges e with
+                | (detEdge,n) ->  detEdge |> Labels |> printEdgesDet |> graphStr
 
-let writeGraphDet edges = File.WriteAllText(wd+"/graph.dot", (graphDet edges));;
-
+//to write the string to a file you'll have to pass the working dictionary (wd) as well
+let writeGraphDet wd edges det = File.WriteAllText(wd+"/graph.dot", (graph edges det));;
 
