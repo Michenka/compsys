@@ -213,3 +213,152 @@ let graph e det =
 //to write the string to a file you'll have to pass the working dictionary (wd) as well
 let writeGraphDet wd edges det = File.WriteAllText(wd+"/graph.dot", (graph edges det));;
 
+
+let merge mem1 mem2 = Map.fold (fun acc key value -> Map.add key value acc) mem1 mem2;;
+
+
+let rec A a memory = 
+    match a with
+    | Name(x) -> Map.tryFind x memory 
+    | Num(x) -> Some x
+    | PlusExpr(x,y) -> match A x memory, A y memory with
+                            | Some n1, Some n2 -> Some (n1+n2)
+                            | _ -> None
+    | MinusExpr(x,y) -> match A x memory, A y memory with
+                            | Some n1, Some n2 -> Some (n1-n2)
+                            | _ -> None
+    | TimesExpr(x,y) -> match A x memory, A y memory with
+                            | Some n1, Some n2 -> Some (n1*n2)
+                            | _ -> None
+    | DivExpr(x,y) -> match A x memory, A y memory with
+                            | Some n1, Some n2 -> Some (n1/n2)
+                            | _ -> None
+    | PowExpr(x,y) -> match A x memory, A y memory with
+                            | Some n1, Some n2 when n2 >= 0 -> Some (int (double n1 ** double n2))
+                            | _ -> None
+    | Array(x,y) -> if Map.containsKey x memory then A y memory else None
+    // A[3] = 
+
+let rec B b memory = 
+    match b with
+    | True(x) -> Some true
+    | False(x) -> Some false
+    | AndExpr(x,y) -> match B x memory, B y memory with
+                        | Some b1, Some b2 -> Some (b1 && b2)
+                        | _ -> None
+    | OrExpr(x,y) ->  match B x memory, B y memory with
+                        | Some b1, Some b2 -> Some (b1 || b2)
+                        | _ -> None
+    //dunno about these
+    // | UAndExpr(x,y) -> match B x memory, B y memory with
+    //                     | Some b1, Some b2 -> Some (b1 & b2)
+    //                     | _ -> None
+    // | UOrExpr(x,y) -> match B x memory, B y memory with
+    //                     | Some b1, Some b2 -> Some (b1 | b2)
+    //                     | _ -> None
+    | NotExpr(x) -> match B x memory with
+                        | Some b -> Some (not b)
+                        | _ -> None
+    | GrExpr(x,y) -> match A x memory, A y memory with
+                        | Some n1, Some n2 -> Some (n1 > n2)
+                        | _ -> None
+    | LeExpr(x,y) ->  match A x memory, A y memory with
+                        | Some n1, Some n2 -> Some (n1 < n2)
+                        | _ -> None
+    | GrEqExpr(x,y) ->  match A x memory, A y memory with
+                        | Some n1, Some n2 -> Some (n1 >= n2)
+                        | _ -> None
+    | LeEqExpr(x,y) ->   match A x memory, A y memory with
+                            | Some n1, Some n2 -> Some (n1 <= n2)
+                            | _ -> None
+    | EqualsExpr(x,y) ->  match A x memory, A y memory with
+                            | Some n1, Some n2 -> Some (n1 = n2)
+                            | _ -> None
+    | NotEqualsExpr(x,y) ->  match A x memory, A y memory with
+                                | Some n1, Some n2 -> Some (not(n1 = n2))
+                                | _ -> None
+
+
+
+
+let rec S action memory = 
+    match action with
+    | Skip(x) -> Some memory
+    | AssExpr(x,y) -> match A x memory with
+                        | None -> None
+                        | _ -> match x with
+                                | Name(str) ->  match A y memory with
+                                                    | None -> None
+                                                    | Some n -> Some (memory |> Map.add str n) 
+                                | _ -> None
+    | DoExpr(x) -> SBdo x memory
+    | IfExpr(x) -> SBif x memory
+and SBdo action memory = 
+    match action with
+    | ArrExpr(b,C) -> match B b memory with
+                        | Some k -> if k then SBdo action (S C memory).Value else Some memory
+                        | _ -> None
+    //deterministic and non-deterministic is decided here
+    | ElseExpr(gc1,gc2) -> match SBdo gc1 memory, SBdo gc2 memory with
+                            | Some k, _ -> Some k
+                            | None, Some m -> Some m
+                            | _ -> None
+and SBif action memory = 
+    match action with
+    | ArrExpr(b,C) -> match B b memory with
+                        | Some k -> if k then S C memory else Some memory
+                        | _ -> None
+    //deterministic and non-deterministic is decided here
+    | ElseExpr(gc1,gc2) -> match SBif gc1 memory, SBif gc2 memory with
+                            | Some k, Some m -> SBif gc2 m
+                            | _ -> None
+
+
+//initiate memory
+let rec Ini map ls = 
+    match ls with
+    | [] -> map
+    | (Name(n),Num(x))::ltail -> Ini (map |> Map.add n x) ltail
+    | _ -> map
+
+
+let ini = [(Name("x"),Num(1));(Name("y"),Num(0))];;
+
+let map = Ini Map.empty ini;;
+
+//examples:
+let eif = IfExpr
+            (ElseExpr
+              (ArrExpr (GrExpr (Name "x", Num 3), AssExpr (Name "y", Num 4)),
+                  ArrExpr (LeExpr (Name "x", Num 2), AssExpr (Name "y", Num 2))));;
+
+
+//if-expressions work
+let mapA = S eif map;;
+mapA.Value;;
+
+//do-expression works too
+let det = DoExpr (ArrExpr (GrExpr (Name "x", Num 3), AssExpr (Name "x", MinusExpr(Name "x",Num 1))));;
+let ini2 = [(Name "x",Num 5)];;
+let map2 = Ini Map.empty ini2;;
+let mapB = S det map2;;
+
+//stuck configuration
+let ini3 = [(Name "k",Num 5)];;
+let map3 = Ini Map.empty ini3;;
+let mapC = S det map3;;
+
+//now idk how to connect that to the program graph 
+let rec printMem mem = 
+    match mem with
+    | [] -> ""
+    | (str, n)::ltail -> str+": "+string n+"\n"+printMem ltail
+
+let runInterpreter e memory =
+    match S e memory with
+    | Some mem -> printMem (Map.toList mem)
+    | None -> "stuck"
+
+eif;;
+map;;
+runInterpreter det map3;;
