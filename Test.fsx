@@ -362,3 +362,49 @@ let runInterpreter e memory =
 eif;;
 map;;
 runInterpreter det map3;;
+
+let exp = DoExpr
+             (ElseExpr
+                (ArrExpr (GrExpr (Name "x", Num 3), AssExpr (Name "y", Num 4)),
+                     ArrExpr (LeExpr (Name "x", Num 2), AssExpr (Name "y", Num 2))));;
+
+graph exp false;;
+
+//non-deterministic
+let rec doneCon ls  =
+    match ls with
+    | [] -> False "" 
+    | l::ltail -> UOrExpr(l, doneCon ltail)
+
+//go through the PG edge by edge
+let rec checkBranch start qs memory=
+    match qs with
+    | [] -> "Stuck",None,start
+    | (e,qf)::qtail -> match e with
+                        | AssLabel(x,y) -> match S (AssExpr(x,y)) memory with
+                                                | Some mem -> evalC(AssExpr(x,y)), Some mem, qf
+                                                | None -> "Status: stuck",None, start
+                        | BoolLabel(b) -> match B b memory with
+                                            | Some f -> if f then evalB b, Some memory,qf else checkBranch start qtail memory
+                                            | None ->  "State: "+start+"\n"+"Status: stuck",None, start
+                        | SkipLabel -> "Skip", Some memory,qf
+                        | Done ls -> match B (NotExpr(doneCon ls)) memory with
+                                        | Some f -> if f then evalB (NotExpr(doneCon ls)), Some memory,qf else checkBranch start qtail memory
+                                        | None -> "State: "+start+"\n"+"Status: stuck",None, start
+                        // if List.exists (fun x -> 
+                        //                                 match x with
+                        //                                     | Some k -> false
+                        //                                     | None -> true ) (List.Map (fun b -> B b memory)) ls then "State: "+qf+"\n"+"Status: stuck",None, qf else 
+
+
+let rec stepWise1 track l memory = 
+    match l with
+    | [] -> "done", memory
+    | (start, qs)::ltail -> match checkBranch start qs memory with
+                                | str, Some mem, qf ->  stepWise1 (track+"State: "+qf+"\n"+printMem (Map.toList mem)+ str+ "\n") ltail mem 
+                                | str, None, _ -> track+str, memory
+
+
+
+let e1,n = det |> edges ;;
+Labels e1;;
