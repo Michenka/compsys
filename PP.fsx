@@ -101,3 +101,74 @@ let rec compute n =
 // Start interacting with the user
 compute 3
 
+(*
+
+let pp e = 
+    printfn "Pretty-Printer: %s" (evalC(e))
+
+let pg e n = 
+    if n = 0 then
+        menu 3 e
+    else
+        printfn "Deterministic graph? Y/N"
+        try
+            let g = Console.ReadLine() |> string
+            if g = "Y" || g = "y" || g = "yes" || g = "Yes" then
+                let det = true
+            else if g = "N" || g = "n" || g = "no" || g = "No" then
+                let det = false
+            else 
+                raise err
+        with err -> pg e (n-1)
+        printf "Enter working dictionary: "
+        try 
+            let wd = Console.ReadLine() |> string
+        with err -> pg e (n-1)
+
+        try 
+            
+    
+
+
+
+let rec menu n e = 
+    if n = 0 then 
+        printfn "Bye bye"
+    else 
+        printfn "Choose an action:"
+        printfn "1. Pretty Printer"
+        printfn "2. Program Graph"
+        printfn "3. Stepwise Execution"
+        printf "Enter your choice: "
+        try
+            let c = Console.ReadLine() |> int 
+            if c = 1 then
+                pp e
+            else if c = 2 then 
+                pg e
+            else if c = 3 then
+                se e
+            else 
+                raise err
+        with err -> menu (n-1) e
+
+
+// We implement here the function that interacts with the user
+let rec compute n =
+    if n = 0 then
+        printfn "Bye bye"
+    else
+        printf "Enter a command: "
+        try
+        // We parse the input string
+        let e = parse (Console.ReadLine()) |> unwrap
+        // and print the result of evaluating it
+        printfn "Expression: %A" (e)
+        menu 3 e
+        compute n
+        with err -> compute (n-1)
+
+// Start interacting with the user
+compute 3
+*)
+
