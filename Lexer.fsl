@@ -1,0 +1,71 @@
+// The generated lexer module will start with this code
+{
+open FSharp.Text.Lexing
+open System
+// open the module that defines the tokens
+open Parser
+// Set the language to English such that 4.0 is parsed as 4 and not 40.
+System.Globalization.CultureInfo.CurrentCulture <- new System.Globalization.CultureInfo("en-US")
+}
+
+// We define macros for some regular expressions we will use later
+let digit       = ['0'-'9']
+let num         = digit+ ( '.' digit+)?  ('E' ('+'|'-')? digit+ )?
+let whitespace  = ([' ''\t']+)?
+let newline     = "\n\r" | '\n' | '\r'
+let true        = "true" whitespace+
+let false       = "false" whitespace+
+let if          = "if" whitespace+
+let fi          = "fi" whitespace+
+let do          = "do" whitespace+
+let od          = "od" whitespace+
+let skip        = "skip" whitespace+
+let name        = ['a'-'z''A'-'Z'](['a'-'z''A'-'Z''0'-'9''_']+)?
+
+
+// We define now the rules for recognising and building tokens
+// for each of the tokens of our language we need a rule
+// NOTE: rules are applied in order top-down.
+//       This is important when tokens overlap (not in this example)
+// deal with tokens that need to be ignored (skip them)
+rule tokenize = parse
+| whitespace    { tokenize lexbuf }
+| newline       { lexbuf.EndPos <- lexbuf.EndPos.NextLine; tokenize lexbuf; }
+// deal with tokens that need to be built
+| num           { NUM(Int32.Parse(LexBuffer<_>.LexemeString lexbuf)) }
+| true          { TRUE(LexBuffer<_>.LexemeString lexbuf) }
+| false         { FALSE(LexBuffer<_>.LexemeString lexbuf) } 
+| if            { IF(LexBuffer<_>.LexemeString lexbuf) }
+| fi            { FI(LexBuffer<_>.LexemeString lexbuf) }
+| do            { DO(LexBuffer<_>.LexemeString lexbuf) }
+| od            { OD(LexBuffer<_>.LexemeString lexbuf) }
+| skip          { SKIP(LexBuffer<_>.LexemeString lexbuf) }
+| name          { let str = (LexBuffer<_>.LexemeString lexbuf) in NAME(str)}
+| "->"          { ARR }
+| "!="          { NEQ }
+| ":="          { ASS }
+| ">="          { GREQ }
+| "<="          { LEEQ }
+| "[]"          { ELSE }
+//arithmetic
+| '*'           { TIMES }
+| '/'           { DIV }
+| '+'           { PLUS }
+| '-'           { MINUS }
+| '^'           { POW }
+| '('           { LPAR }
+| ')'           { RPAR }
+// boolean
+| "&&"          { AND }
+| "||"          { OR }
+| '&'           { UAND }
+| '|'           { UOR }
+| '>'           { GR }
+| '<'           { LE }
+| '='           { EQ }
+| '!'           { NOT }
+// commands
+| ';'           { SEMI }
+| '['           { LSPAR }
+| ']'           { RSPAR }
+| eof           { EOF }

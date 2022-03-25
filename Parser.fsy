@@ -1,0 +1,99 @@
+// Open the file that defines the type "expr" we shall use as AST
+%{
+open CalculatorTypesAST
+%}
+
+// Declare the tokens (terminal symbols)
+%token <int> NUM
+%token <string> NAME TRUE FALSE IF FI DO OD SKIP
+%token TIMES DIV PLUS MINUS POW LPAR RPAR EOF AND OR UAND UOR NOT ASS ARR GR LE GREQ LEEQ EQ NEQ ELSE SEMI LSPAR RSPAR
+// NOTE: the actual formats of these tokens are defined in the lexer file
+//       as regular expressions
+
+// Specify precedence and associativity of operators
+// Precedence is given by the order (from low to high)
+%left ASS
+%left 
+%left PLUS MINUS
+%left TIMES DIV
+%left AND OR 
+%left NOT
+%right POW
+
+
+
+// We declare the initial non-terminal symbol
+%start start
+
+// We specify the return type of each of then non-terminal symbols
+%type <CalculatorTypesAST.TypeC> start
+%type <arithmetic1> aExpr
+%type <Boolean1> bExpr
+%type <TypeC> command
+%type <GC> guarded
+
+// Grammar productions
+%%
+
+// The first production in "formal" notation is
+// start -> expression
+// here written:
+start: command EOF        {$1}
+
+// Note that we need to insert an End-Of-File (EOF)
+// The code annotation { $1 } specifies that parsing with this production
+// returns whatever parsing the expression returns: $1 is the result of parsing
+// the first component of the production (i.e. expression)
+
+// The productions for expressions are like in the grammar we saw in class
+// written in the yacc format:
+command:
+// misc
+  | aExpr ASS aExpr         { AssExpr($1,$3) }
+  | IF guarded FI                            { IfExpr($2) }
+  | DO guarded OD                            { DoExpr($2) }
+  | command SEMI command    { SemiExpr($1,$3)}
+  | SKIP                    { Skip($1) }                  
+
+
+guarded:
+  | bExpr ARR command                  { ArrExpr($1,$3)}
+  | guarded ELSE guarded                          { ElseExpr($1,$3)}
+
+aExpr:
+  | NAME                      {Name($1)}
+  | NUM                                 { Num($1) }
+  | aExpr TIMES aExpr       { TimesExpr($1,$3) }
+  | aExpr DIV aExpr         { DivExpr($1,$3) }
+  | aExpr PLUS aExpr        { PlusExpr($1,$3) }
+  | aExpr MINUS aExpr       { MinusExpr($1,$3) }
+  | aExpr POW aExpr         { PowExpr($1,$3) }
+  | PLUS aExpr                    { UPlusExpr($2) }
+  | MINUS aExpr                   { UMinusExpr($2) }
+  | LPAR aExpr RPAR               { $2 }
+  | NAME LSPAR aExpr RSPAR        { Array($1,$3) }
+
+
+bExpr:
+  | TRUE                                { True($1) }
+  | FALSE                               { False($1) }
+  | bExpr AND bExpr               { AndExpr($1,$3) }
+  | bExpr OR bExpr                { OrExpr($1,$3) } 
+  | bExpr UAND bExpr              { UAndExpr($1, $3) }
+  | bExpr UOR bExpr               { UOrExpr($1,$3) }
+  | NOT bExpr                        { NotExpr($2) }
+  | aExpr GR aExpr          { GrExpr($1, $3) }
+  | aExpr LE aExpr          { LeExpr($1, $3) }
+  | aExpr GREQ aExpr        { GrEqExpr($1, $3) }
+  | aExpr LEEQ aExpr        { LeEqExpr($1, $3) }
+  | aExpr EQ aExpr          { EqualsExpr($1, $3) }
+  | aExpr NEQ aExpr         { NotEqualsExpr($1, $3) }
+  | LPAR bExpr RPAR                  { $2 }
+
+
+// Again, the code annotation specifies the result of parsing
+// For example { TimesExpr($1,$3) } specifies that parsing with the production
+// returns the value TimesExpr($1,$3), where $i is the result of parsing
+// component i in the production (in this case the lhs and rhs operands)
+
+%%
