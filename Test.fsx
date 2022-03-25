@@ -102,8 +102,8 @@ let rec edgesC start stop e (edges,n)=
     | Skip(x) -> ((start,SkipLabel,stop)::edges,n)
     | AssExpr(x,y) -> ((start, AssLabel(x,y), stop)::edges,n)
     | IfExpr(x) -> edgesGC start stop x (edges,n) 
-    | DoExpr(x) -> edgesGC start start x ((start,Done(extractBool x),stop)::edges,n)
-    | SemiExpr(x,y) -> edgesC start ("q"+string n) x (edgesC ("q"+ string n) stop y (edges,n))
+    | DoExpr(x) -> edgesGC start start x ((start,Done(extractBool x),stop)::edges,n+1)
+    | SemiExpr(x,y) -> edgesC ("q"+string n) stop y (edgesC start ("q"+ string n) x (edges,n))
 
 and edgesGC start stop e (edges,n) = 
     match e with
@@ -115,8 +115,8 @@ let rec detEdgesC start stop (e:TypeC) (edges,n)=
     | Skip(x) -> ((start,SkipLabel,stop)::edges,n)
     | AssExpr(x,y) -> ((start, AssLabel(x,y), stop)::edges,n)
     | IfExpr(x) -> detEdgesGC start stop x (edges,n) 
-    | DoExpr(x) -> detEdgesGC start start x ((start,Done(extractBool x),stop)::edges,n)
-    | SemiExpr(x,y) -> detEdgesC start ("q"+string n) x (detEdgesC ("q"+ string n) stop y (edges,n))
+    | DoExpr(x) -> edgesGC start start x ((start,Done(extractBool x),stop)::edges,n+1)
+    | SemiExpr(x,y) -> edgesC ("q"+string n) stop y (edgesC start ("q"+ string n) x (edges,n))
 
 and detEdgesGC start stop e (edges,n) = 
     match e with
@@ -277,6 +277,16 @@ let rec B b memory =
     | NotEqualsExpr(x,y) ->  match A x memory, A y memory with
                                 | Some n1, Some n2 -> Some (not(n1 = n2))
                                 | _ -> None
+    | UAndExpr(x,y) -> match B x memory with
+                            | Some n1 -> if not n1 then Some false else match B y memory with
+                                                                            | Some n2 -> Some ((n1 && n2))
+                                                                            | _ -> None
+                            | _ -> None
+    | UOrExpr(x,y) -> match B x memory with
+                            | Some n1 -> if n1 then Some true else match B y memory with
+                                                                    | Some n2 -> Some ((n1 || n2))
+                                                                    | _ -> None
+                            | _ -> None
 
 
 
@@ -397,14 +407,63 @@ let rec checkBranch start qs memory=
                         //                                     | None -> true ) (List.Map (fun b -> B b memory)) ls then "State: "+qf+"\n"+"Status: stuck",None, qf else 
 
 
-let rec stepWise1 track l memory = 
-    match l with
-    | [] -> "done", memory
-    | (start, qs)::ltail -> match checkBranch start qs memory with
-                                | str, Some mem, qf ->  stepWise1 (track+"State: "+qf+"\n"+printMem (Map.toList mem)+ str+ "\n") ltail mem 
-                                | str, None, _ -> track+str, memory
+let ls1 = [(BoolLabel (GrExpr (Name "x", Num 3)), "q0");
+            (Done [GrExpr (Name "x", Num 3)], "qf")];;
+let dC = doneCon [GrExpr (Name "x", Num 3)];;
+B (NotExpr(dC)) map;;
+map;;
+
+let rec stepWise1 track ls (start, qs) memory n i= 
+    if n < i then match checkBranch start qs memory with
+                    | str, Some mem, qf -> match qf with
+                                            | "qf" -> (track+"State: "+start+"\n"+"Action: "+str+"\n"+"Memory:\n"+printMem (Map.toList mem)+ "\n"+"Next State:"+qf+"\n"+"Successfully Terminated\n"), memory 
+                                            | _ ->  stepWise1 (track+"State: "+start+"\n"+"Action: "+str+"\n"+"Memory:\n"+printMem (Map.toList mem)+ "\n"+"Next State:"+qf+"\n\n") ls (List.find (fun (q,_) -> q=qf) ls) mem (n+1) i
+                    | str, None, _ -> (track+str) , memory
+    else (track+"stuck: too many recursions\n"),memory
+
+let findStart ls qs= List.find (fun (q,_) -> q=qs) ls;;
+List.item 0 ls1;;
+let (s,qs) = findStart ls1 "qf";;
+qs;;
 
 
+ls1;;
+checkBranch "qf" qs map;;
 
-let e1,n = det |> edges ;;
+
+let e1,n = eif |> edges ;;
 Labels e1;;
+ls1;;
+let strMem map= "Memory:\n"+printMem (Map.toList map)
+let ls1 = (e1 |> Labels);;
+let track, mem = stepWise1 (strMem map) ls1 (findStart ls1 "qs") map 0 20;;
+printf "%s" track;;
+eif;;
+
+
+let stuck = SemiExpr
+                (AssExpr (Name "x", Num 0),
+                    DoExpr
+                        (ArrExpr
+                            (LeExpr (Name "x", Num 500),
+                                AssExpr (Name "x", PlusExpr (Name "x", Num 1)))));;
+
+
+
+let e2,n2 = stuck |> edges;;
+Labels e2;;
+let ls2 = (e2 |> Labels);;
+let track2, mem2 = stepWise1 (strMem map) ls2 (findStart ls2 "qs") map 0 1002;;
+printf "%s" track2;;
+
+let d = Done [LeExpr (Name "x", Num 500)];;
+let dCon = doneCon [LeExpr (Name "x", Num 500)];;
+B (NotExpr(dCon)) mem2;;
+
+graph stuck true;;
+
+graph (SemiExpr(AssExpr (Name "x", Num 0),DoExpr(ArrExpr(LeExpr (Name "x", Num 2),AssExpr (Name "x", PlusExpr (Name "x", Num 1)))))) false;;
+
+graph (SemiExpr (AssExpr (Name "x", Num 1), AssExpr (Name "y", Num 1))) false;;
+
+edges (SemiExpr (AssExpr (Name "x", Num 1), AssExpr (Name "y", Num 1)));;
