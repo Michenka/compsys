@@ -467,3 +467,158 @@ graph (SemiExpr(AssExpr (Name "x", Num 0),DoExpr(ArrExpr(LeExpr (Name "x", Num 2
 graph (SemiExpr (AssExpr (Name "x", Num 1), AssExpr (Name "y", Num 1))) false;;
 
 edges (SemiExpr (AssExpr (Name "x", Num 1), AssExpr (Name "y", Num 1)));;
+
+
+
+
+//task 5: program analysis 
+//Program Analysis
+
+type Sign =  Pos | Neg | Zero
+
+facex;;
+
+transitions facex;;
+
+let plusSign s1 s2 = 
+  match s1 with
+  | Pos -> match s2 with
+            | Pos -> Set.empty.Add(Pos)
+            | Neg -> Set.empty.Add(Pos).Add(Neg).Add(Zero)
+            | Zero -> Set.empty.Add(Pos)
+  | Neg -> match s2 with
+            | Pos -> Set.empty.Add(Neg).Add(Pos).Add(Zero)
+            | Zero -> Set.empty.Add(Neg)
+            | Neg -> Set.empty.Add(Neg)
+  | Zero -> match s2 with
+            | Pos -> Set.empty.Add(Pos)
+            | Zero -> Set.empty.Add(Zero)
+            | Neg -> Set.empty.Add(Neg)
+
+let minSign s1 s2 =
+  match s1 with
+  | Pos -> match s2 with
+            | Pos -> Set.empty.Add(Pos).Add(Zero).Add(Neg)
+            | Zero -> Set.empty.Add(Pos)
+            | Neg -> Set.empty.Add(Pos)
+  | Zero -> match s2 with
+              | Pos -> Set.empty.Add(Neg)
+              | Zero -> Set.empty.Add(Zero)
+              | Neg -> Set.empty.Add(Pos)
+  | Neg -> match s2 with
+            | Pos -> Set.empty.Add(Neg)
+            | Zero -> Set.empty.Add(Neg)
+            | Neg -> Set.empty.Add(Pos).Add(Zero).Add(Neg)
+
+let timSign s1 s2 =
+  match s1 with
+  | Pos -> match s2 with
+            | Pos -> Set.empty.Add(Pos)
+            | Zero -> Set.empty.Add(Zero)
+            | Neg -> Set.empty.Add(Neg)
+  | Zero -> Set.empty.Add(Zero)
+  | Neg -> match s2 with
+            | Pos -> Set.empty.Add(Neg)
+            | Zero -> Set.empty.Add(Zero)
+            | Neg -> Set.empty.Add(Pos)
+
+
+let divSign s1 s2 =
+  match s1 with
+  | Pos -> match s2 with
+            | Pos -> Set.empty.Add(Pos)
+            | Zero -> Set.empty
+            | Neg -> Set.empty.Add(Neg)
+  | Zero -> match s2 with
+            | Zero -> Set.empty
+            | _ -> Set.empty.Add(Zero)
+  | Neg -> match s2 with
+            | Zero -> Set.empty
+            | Pos -> Set.empty.Add(Neg)
+            | Neg -> Set.empty.Add(Pos)
+
+let powSign s1 s2 = 
+  match s1 with
+  | Zero -> Set.empty.Add(Zero)
+  | Pos -> Set.empty.Add(Pos)
+  | Neg -> match s2 with
+            | Zero -> Set.empty.Add(Pos)
+            | _ -> Set.empty.Add(Neg).Add(Pos)
+
+
+
+let set1 = Set.empty.Add(Neg).Add(Zero)
+let set2 = Set.empty.Add(Neg)
+
+
+
+
+
+
+let sign n = 
+  match n with
+  | n when n = 0 -> Zero
+  | n when n > 0 -> Pos
+  | _ -> Neg
+
+let helper s set = Set.map (fun x -> plusSign s x) (set)
+
+
+
+let s = Set.empty.Add(Pos).Add(Zero);;
+s;;
+let apply s sign op = (Set.map (fun x -> (op x sign)) s) |> Set.toSeq |> Set.unionMany ;;
+
+apply s Pos plusSign;;
+
+// let connect sm = Set.unionMany (Set.toSeq sm);;
+
+
+// plusSign Pos Pos;;
+
+let operation s1 op s2 = (Set.map (fun x -> apply s2 x op) s1) |> Set.toSeq |> Set.unionMany;;
+
+let s2 = Set.empty.Add(Pos).Add(Zero);;
+
+operation s (plusSign) s2;;
+
+helper Neg set2;;
+
+
+let rec analS a mem =
+    match a with
+    | Num(n) -> Set.empty.Add(sign n)
+    | Name(x) -> match Map.tryFind x mem with
+                  | Some s -> s
+                  | None -> Set.empty
+    | PlusExpr(x,y) -> operation (analS x mem) (plusSign) (analS y mem)
+    | MinusExpr(x,y) -> operation (analS x mem) (minSign) (analS y mem)
+    | TimesExpr(x,y) -> operation (analS x mem) (timSign) (analS y mem)
+    | DivExpr(x,y) -> operation (analS x mem) (divSign) (analS y mem)
+    | PowExpr(x,y) -> operation (analS x mem) (powSign) (analS y mem)
+    | Array(name, e) -> match Set.union (analS e mem) (Set.empty.Add(Pos).Add(Zero)) |> Set.isEmpty with
+                        | true -> Set.empty
+                        | false -> analS (Name(name)) mem
+let rec analC c mem =
+    match c with
+    | AssExpr(x,y) -> match x with
+                        | Name(n) -> Map.add n (analS y mem) mem 
+                        | _ -> mem
+    | 
+
+
+
+let mem1 = Map.empty.Add("x",Set.empty.Add(Pos).Add(Neg)).Add("y",Set.empty.Add(Neg));;
+mem1;;
+let mem2 = Map.empty.Add("x",Set.empty.Add(Zero)).Add("y",Set.empty.Add(Neg));;
+mem2;;
+let aexp = PlusExpr(Name("x"),Name("y"));;
+
+analS aexp mem1;;
+
+let semantics memSet a = Set.map (fun s -> (analS a s)) memSet;;
+
+let memSet1 = Set.empty.Add(mem1).Add(mem2);;
+
+semantics memSet1 aexp;;
+
